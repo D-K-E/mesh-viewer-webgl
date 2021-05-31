@@ -1,0 +1,48 @@
+<html>
+
+<head>
+    <meta charset="utf-8" />
+</head>
+
+<body>
+    <div class="canvas-container">
+        <canvas id="webgl-canvas" width="640" height="480"></canvas>
+    </div>
+    <button id="start-btn" onclick="draw();">Start</button>
+    <script src="assets/libs/gl-matrix.js"></script>
+    <script src="assets/js/meshviewer.js">
+    </script>
+    <script type="x-shader/x-vertex" id="constant-vs">
+        attribute vec3 vcoord;
+        uniform mat4 model;
+        void main(){
+        gl_Position = model * vec4(vcoord, 1.0);
+        }
+    </script>
+    <script type="x-shader/x-fragment" id="constant-fs">
+        precision mediump float;
+        uniform vec3 vcolor;
+        void main(){
+        gl_FragColor = vec4(vcolor, 1.0);
+        }
+    </script>
+    <script>
+        var smanager;
+        smanager = new SceneManager();
+
+        function init() {
+            let canvas_id = "webgl-canvas";
+            let vs_id = "constant-vs";
+            let fs_id = "constant-fs";
+            smanager.init("webgl-canvas", vs_id, fs_id);
+        }
+
+        function draw() {
+            smanager.draw();
+        }
+        init();
+    </script>
+
+</body>
+
+</html>
