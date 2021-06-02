@@ -10,6 +10,16 @@
     </div>
     <button id="start-btn" onclick="draw();">Start</button>
     <script src="assets/libs/gl-matrix.js"></script>
+    <script src="assets/js/objects.js"></script>
+    <!-- Shader Related -->
+    <script src="assets/js/vao.js"></script>
+    <script src="assets/js/vbo.js"></script>
+    <script src="assets/js/shader.js"></script>
+    <!-- mesh Related -->
+    <script src="assets/js/mesh.js"></script>
+    <!-- camera Related -->
+    <script src="assets/js/camera.js"></script>
+    <script src="assets/js/light.js"></script>
     <script src="assets/js/meshviewer.js">
     </script>
     <script type="x-shader/x-vertex" id="constant-vs">
@@ -26,6 +36,113 @@
         gl_FragColor = vec4(vcolor, 1.0);
         }
     </script>
+    <script type="x-shader/x-vertex" id="phong-vs">
+        #version 300 es
+        layout(location = 0) in vec3 aPos; // in local space
+        layout(location = 1) in vec3 aNormal; // in local space
+        layout(location = 2) in vec2 aTexCoord; // in local space
+
+        uniform mat4 model;
+        uniform mat4 view;
+        uniform mat4 projection;
+
+        out vec3 Normal; // in world space
+        out vec2 TexCoord; // in local space
+        out vec3 FragPos; // in world space
+
+        void main(){
+            FragPos = vec3(model * vec4(aPos, 1.0));
+            TexCoord = aTexCoord;
+            Normal = vec3(model * vec4(aNormal, 1.0));
+            gl_Position = projection * view * model * vec4(aPos, 1.0);
+        }
+    </script>
+    <script type="x-shader/x-fragment" id="phong-fs">
+        #version 300 es
+        precision highp float;
+
+        in vec3 Normal;
+        in vec2 TexCoord;
+        in vec3 FragPos;
+
+        uniform sampler2D diffuseMap;
+        uniform vec3 viewPos;
+        uniform vec3 lightPos;
+
+        // phong related
+        uniform vec3 ambientShininessLight;
+        uniform vec3 attc;
+
+
+        vec3 getLightDir();
+        vec3 getViewDir();
+        vec3 getSurfaceNormal();
+        vec3 getDiffuseColor(vec3 lightDir, vec3 n, vec3 c);
+        float computeAttenuation(vec3 att, float lfragdist);
+
+        //
+        void main(){
+            float ambientCoeff = ambientLightShininess.x;
+            float lightIntensity = ambientLightShininess.z;
+            float shininess = ambientLightShininess.y;
+            vec3 texColor = texture(diffuseMap, TexCoord).xyz;
+
+            // compute ambient term
+            // I_a * O_d * k_a
+            vec3 ambient = texColor * ambientCoeff;
+
+            // lambertian terms k_d * (N \cdot L) * I_p
+            vec3 surfaceNormal = getSurfaceNormal();
+            vec3 ldir = getLightDir();
+            vec3 diffuseColor = getDiffuseColor(ldir, surfaceNormal, texColor);
+
+            // compute attenuation terms
+            float dist = distance(lightPos, FragPos);
+            float attenuation = computeAttenuation(attc, dist);
+
+            // compute diffuse term
+            vec3 diffuse = attenuation * diffuseColor * lightIntensity;
+
+            // compute specular term
+            // vec3 spec = getSpecColor(lightDir, surfaceNormal);
+            gl_FragColor = vec4(ambient + diffuse, // + specular
+                                1.0);
+        }
+        vec3 getLightDir(){
+            return normalize(lightPos - FragPos);
+        }
+        vec3 getViewDir(){
+            return normalize(viewPos - FragPos);
+        }
+        vec3 getSurfaceNormal(){return normalize(Normal);}
+        vec3 getDiffuseColor(vec3 lightDir, vec3 normal, vec3 color){
+            //
+            float costheta = dot(lightDir, normal);
+            // opaque surfaces
+            return max(costheta, 0.0) * color;
+        }
+        vec3 getSpecColor(vec3 lightDir, vec3 normal){
+            vec3 vdir = getViewDir();
+            // TODO specular map
+            /*
+            vec3 spec = texture(specularMap, TexCoord).rgb;
+            vec3 refdir = reflect(-lightDir, normal).rgb;
+            vec3 hwaydir = normalize(lightDir + vdir);
+            float specAngle = max(dot(refdir, hwaydir), 0.0);
+            return pow(specAngle, shininess) * spec;
+            */
+            return vdir;
+        }
+        float computeAttenuation(vec3 att, float lfragdist){
+            float dist2 = lfragdist * lfragdist;
+            float att1 = lfragdist * att.y;
+            float att2 = dist * att.z;
+            float result = att.x + att2 + att1;
+            result = 1.0/result;
+            return min(result, 1);
+        } 
+    </script>
+
     <script>
         var smanager;
         smanager = new SceneManager();
