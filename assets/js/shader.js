@@ -2,233 +2,233 @@
 
 // simple shader class
 
+// check the shader compilation
+function checkShaderCompilation(gl, shader) {
+    let gbool = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+    if (!gbool) {
+        let mess = gl.getShaderInfoLog(shader);
+        throw mess;
+    }
+    return gbool;
+}
+
+function checkShaderProgramCompilation(gl, program) {
+    // check the program compilation
+    let pstat = gl.getProgramParameter(program, gl.LINK_STATUS);
+    if (!pstat) {
+        let mess = gl.getProgramInfoLog(program);
+        throw mess;
+    }
+    return pstat;
+}
+
+function getUniformLocation(gl, program, name) {
+    let locVal = gl.getUniformLocation(program, name);
+    if (locVal === null) {
+        throw "no location is given for the uniform in the program";
+    }
+    check_error(gl);
+    return locVal;
+}
+
 class Shader {
     constructor(vs_id, fs_id) {
-        this._gl_shader = null;
-        this._vertex_shader_text = document.getElementById(vs_id).text.trim();
-        this._fragment_shader_text =
-            document.getElementById(fs_id).text.trim();
-        this._gl_uniform_props = null;
-        this._vao = new VertexArrayObject();
-        this._vbo = new VertexBufferObject();
+        // shader source [{"text": "", "type": ""}]
+        this._shader_sources = null;
+        this._shader_id = null;
+        this.init_shader_sources_vs_fs(vs_id, fs_id);
     }
-    /*
-    coord === {
-        name: "string",
-        offset: int,
-        stride: int
-        size: int
-        type: gl.FLOAT
-    };
-     */
-
-    /*
-    props == {
-    name: "string",
-    location: int,
-    type: "vec3",
-    data: []
-    }
-     */
-    get uniform_props() {
-        if (this._gl_uniform_props === null) {
-            throw "uniform props are null";
-        }
-        return this._gl_uniform_props;
-    }
-    set_uniform(props) {
-        if (this._gl_uniform_props === null) {
-            this._gl_uniform_props = {};
-        }
-        this.uniform_props[props["name"]] = props;
-    }
-    set_uniform_data(name, data) {
-        this.uniform_props[name]["data"] = data;
-    }
-    get_udata(name) {
-        let udata = this._gl_uniform_props[name].data;
-        if (udata === null) {
-            throw "uniform data for " + name + " is null";
-        }
-        return udata;
-    }
-    get_utype(name) {
-        let utype = this._gl_uniform_props[name].type;
-        if (utype === null) {
-            throw "uniform type for " + name + " is null";
-        }
-        return utype;
-    }
-    get_uloc(name) {
-        let uloc = this._gl_uniform_props[name].location;
-        if (uloc === null) {
-            throw "uniform location for " + name + " is null";
-        }
-        return uloc;
-    }
-    load_uniform_vector(gl, name) {
-        let udata = this.get_udata(name);
-        let utype = this.get_utype(name);
-        let uloc = this.get_uloc(name);
-        if (utype === "vec2") {
-            gl.uniform2fv(uloc, udata);
-        } else if (utype === "vec3") {
-            gl.uniform3fv(uloc, udata);
-
-        } else if (utype === "vec4") {
-            gl.uniform4fv(uloc, udata);
-        } else {
-            throw "unknown uniform type: " + utype;
-        }
-
-    }
-    load_uniform_matrix(gl, name) {
-        let udata = this.get_udata(name);
-        let utype = this.get_utype(name);
-        let uloc = this.get_uloc(name);
-        if (utype === "mat2") {
-            gl.uniformMatrix2fv(uloc, false, udata);
-        } else if (utype === "mat3") {
-            gl.uniformMatrix3fv(uloc, false, udata);
-
-        } else if (utype === "mat4") {
-            gl.uniformMatrix4fv(uloc, false, udata);
-        } else {
-            throw "unknown uniform type: " + utype;
+    init_shader_sources(arr) {
+        for (const key in arr) {
+            let source_id_type = arr[key];
+            let text =
+                document.getElementById(source_id_type["id"]).text.trim();
+            let stype = source_id_type["type"];
+            this.set_shader_source(text, stype);
         }
     }
-    load_uniforms(gl) {
-        for (const key in this.uniform_props) {
-            let uprop = this.uniform_props[key];
-            if (uprop.type.includes("mat")) {
-                this.load_uniform_matrix(gl, key);
-            } else if (uprop.type.includes("vec")) {
-                this.load_uniform_vector(gl, key);
+    init_shader_sources_vs_fs(vs_id, fs_id) {
+        let arr = [{
+            "type": "FRAGMENT_SHADER",
+            "id": fs_id
+        }, {
+            "type": "VERTEX_SHADER",
+            "id": vs_id
+        }];
+        this.init_shader_sources(arr);
+    }
+    get shader_sources() {
+        if (this._shader_sources === null) {
+            throw "shader sources are null";
+        }
+        return this._shader_sources;
+    }
+    get_shader_source_by_type(stype) {
+        for (const key in this.shader_sources) {
+            let source = this.shader_sources[key];
+            if (source["type"] === stype) {
+                return source["text"];
             }
         }
+        return null;
     }
-
-    set_phong_vs_props(gl) {
-        let aPos = {
-            "name": "aPos",
-            "size": 3,
-            "type": gl.FLOAT,
-            "location": 0,
-            "stride": 0,
-            "offset": 0
-        };
-        this.vao.set_props(aPos);
-        let aNormal = {
-            "name": "aNormal",
-            "size": 3,
-            "type": gl.FLOAT,
-            "location": 1,
-            "stride": 3,
-            "offset": 0
-        };
-        this.vao.set_props(aNormal);
-        let aTexCoord = {
-            "name": "aNormal",
-            "size": 2,
-            "type": gl.FLOAT,
-            "location": 2,
-            "stride": 5,
-            "offset": 0
-        };
-        this.vao.set_props(aTexCoord);
-
-    }
-    set_phong_fs_props(gl) {
-        this.set_vec3_uniforms(gl, "viewPos");
-        this.set_vec3_uniforms(gl, "lightPos");
-        this.set_vec3_uniforms(gl, "attc");
-        this.set_vec3_uniforms(gl, "ambientShininessLight");
-    }
-    set_type_uniforms(gl, name, type) {
-        let obj = {
-            "name": name,
-            "type": type,
-            "data": null,
-            "location": null
-        };
-        gl.useProgram(this.mShader);
-        obj["location"] = gl.getUniformLocation(this.mShader, obj["name"]);
-        this.set_uniform(obj);
-    }
-    set_vec3_uniforms(gl, name) {
-        this.set_type_uniforms(gl, name, "vec3");
-    }
-    set_mat4_uniforms(gl, name) {
-        this.set_type_uniforms(gl, name, "mat4");
-    }
-
-    set_constant_fs_props(gl) {
-        this.set_vec3_uniforms(gl, "vcolor");
-        this.set_mat4_uniforms(gl, "model");
-    }
-    set_constant_vs_coord(gl) {
-        let coord = {
-            "name": "vcoord",
-            "size": 3,
-            "type": gl.FLOAT,
-            "location": null,
-            "stride": 0,
-            "offset": 0
-        };
-        coord["location"] = gl.getAttribLocation(this.mShader, coord["name"]);
-        this.vao.set_props(coord);
-    }
-    get vao() {
-        if (this._vao === null) {
-            throw "vertex array object is null";
+    set_shader_source(stext, stype) {
+        if (this._shader_sources === null) {
+            this._shader_sources = [];
         }
-        return this._vao;
-    }
-    get vbo() {
-        if (this._vbo === null) {
-            throw "vertex buffer object is null";
+        let st = this.get_shader_source_by_type(stype);
+        if (st === null) {
+            this.shader_sources.push({
+                "text": stext,
+                "type": stype
+            });
+        } else {
+            throw "same type shader already exists among shader source";
         }
-        return this._vbo;
     }
-    init(gl, data) {
-        let vs_shader = this.load_shader(gl, gl.VERTEX_SHADER,
-            this._vertex_shader_text);
-        let fs_shader = this.load_shader(gl, gl.FRAGMENT_SHADER,
-            this._fragment_shader_text);
-        this._gl_shader = gl.createProgram();
-        gl.attachShader(this.mShader, vs_shader);
-        gl.attachShader(this.mShader, fs_shader);
-        gl.linkProgram(this.mShader);
-
-        if (!gl.getProgramParameter(this.mShader, gl.LINK_STATUS)) {
-            throw "shader program is not linked";
-        }
-        // vertex buffer object and vertex array object
-        // setting up a constant color shader
-        this.vao.init(gl);
-        this.vbo.init(gl, data);
-        this.set_constant_fs_props(gl);
-        this.set_constant_vs_coord(gl);
+    get vs_text() {
+        return this.get_shader_source_by_type("VERTEX_SHADER");
     }
-
-    get mShader() {
-        if (this._gl_shader === null) {
-            throw "gl shader is null";
+    get fs_text() {
+        return this.get_shader_source_by_type("FRAGMENT_SHADER");
+    }
+    get program_id() {
+        if (this._shader_id === null) {
+            throw "shader id is null";
         }
-        return this._gl_shader;
+        return this._shader_id;
     }
     load_shader(gl, shader_type, shader_txt) {
+        check_error(gl);
         let compiled_shader = gl.createShader(shader_type);
         gl.shaderSource(compiled_shader, shader_txt);
         gl.compileShader(compiled_shader);
-
-        if (!gl.getShaderParameter(compiled_shader, gl.COMPILE_STATUS)) {
-            throw "shader can not be compiled";
-        }
+        checkShaderCompilation(gl, compiled_shader);
+        check_error(gl);
         return compiled_shader;
     }
     activate(gl) {
-        gl.useProgram(this.mShader);
-        this.vao.enable(gl, this.vbo.vbo);
+        gl.useProgram(this.program_id);
+    }
+
+    link_program(gl) {
+        this._shader_id = gl.createProgram();
+        let shaders = [];
+        for (const key in this.shader_sources) {
+            let source = this.shader_sources[key];
+            let text = source["text"];
+            var stype = null;
+            if (source["type"] === "FRAGMENT_SHADER") {
+                stype = gl.FRAGMENT_SHADER;
+            } else if (source["type"] === "VERTEX_SHADER") {
+                stype = gl.VERTEX_SHADER;
+            } else {
+                throw "unsupported shader type " + source["type"];
+            }
+            let shader = this.load_shader(gl, stype, text);
+            shaders.push(shader);
+        }
+        for (const key in shaders) {
+            gl.attachShader(this.program_id, shaders[key]);
+        }
+        gl.linkProgram(this.program_id);
+        checkShaderProgramCompilation(gl, this.program_id);
+    }
+    check_type(val, expected_type) {
+        check_type(val, expected_type);
+    }
+    check_components(val, expected_nb_components) {
+        let nc = expected_nb_components;
+        if (typeof(val) === "object") {
+            if (val.length === nc) {
+                return true;
+            } else {
+                let mess = "expected number of components is " + nc.toString();
+                mess += " but you had provided an object of length: ";
+                mess += val.length.toString();
+                throw mess;
+            }
+        } else {
+            let m = "object " + val.toString() + " is not an array";
+            m += " type: " + typeof(val);
+            m += " with length " + val.length.toString();
+            m += " number of components: " +
+                expected_nb_components.toString();
+            throw m;
+        }
+    }
+    set_int_uniform(gl, name, value) {
+        this.check_type(value, "number")
+        let uloc = getUniformLocation(gl, this.program_id, name);
+        gl.uniform1i(uloc, value);
+    }
+    set_bool_uniform(gl, name, value) {
+        this.check_type(value, "boolean")
+        let uloc = getUniformLocation(gl, this.program_id, name);
+        gl.uniform1i(uloc, Number(value));
+    }
+    set_float_uniform(gl, name, value) {
+        this.check_type(value, "number")
+        let uloc = getUniformLocation(gl, this.program_id, name);
+        gl.uniform1f(uloc, parseFloat(value));
+    }
+    set_vec2_uniform(gl, name, value) {
+        this.check_components(value, 2)
+        let uloc = getUniformLocation(gl, this.program_id, name);
+        gl.uniform2f(uloc, value[0], value[1]);
+    }
+    set_vec3_uniform(gl, name, value) {
+        this.check_components(value, 3)
+        let uloc = getUniformLocation(gl, this.program_id, name);
+        gl.uniform3f(uloc, value[0], value[1], value[2]);
+    }
+    set_vec4_uniform(gl, name, value) {
+        this.check_components(value, 4)
+        let uloc = getUniformLocation(gl, this.program_id, name);
+        gl.uniform4f(uloc, value[0], value[1], value[2], value[3]);
+    }
+    set_mat2_uniform(gl, name, value) {
+        this.check_components(value, 4)
+        let uloc = getUniformLocation(gl, this.program_id, name);
+        gl.uniformMatrix2fv(uloc, false, value);
+    }
+    set_mat3_uniform(gl, name, value) {
+        this.check_components(value, 9)
+        let uloc = getUniformLocation(gl, this.program_id, name);
+        gl.uniformMatrix3fv(uloc, false, value);
+    }
+    set_mat4_uniform(gl, name, value) {
+        this.check_components(value, 16)
+        let uloc = getUniformLocation(gl, this.program_id, name);
+        gl.uniformMatrix4fv(uloc, false, value);
+    }
+    set_uniform(gl, name, udata, utype) {
+        if (utype === "vec2") {
+            this.set_vec2_uniform(gl, name, udata);
+        } else if (utype === "vec3") {
+            this.set_vec3_uniform(gl, name, udata);
+        } else if (utype === "vec4") {
+            this.set_vec4_uniform(gl, name, udata);
+        } else if (utype === "mat2") {
+            this.set_mat2_uniform(gl, name, udata);
+        } else if (utype === "mat3") {
+            this.set_mat3_uniform(gl, name, udata);
+        } else if (utype === "mat4") {
+            this.set_mat4_uniform(gl, name, udata);
+        } else if (utype === "bool") {
+            this.set_bool_uniform(gl, name, udata);
+        } else if (utype === "int") {
+            this.set_int_uniform(gl, name, udata);
+        } else if (utype === "float") {
+            this.set_float_uniform(gl, name, udata);
+        } else {
+            throw "unknown uniform type: " + utype;
+        }
+    }
+}
+
+class ConstantColorShader extends Shader {
+    constructor(vs_id, fs_id) {
+        super(vs_id, fs_id);
     }
 }

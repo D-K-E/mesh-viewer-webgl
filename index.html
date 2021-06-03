@@ -2,38 +2,67 @@
 
 <head>
     <meta charset="utf-8" />
-</head>
 
 <body>
     <div class="canvas-container">
         <canvas id="webgl-canvas" width="640" height="480"></canvas>
     </div>
     <button id="start-btn" onclick="draw();">Start</button>
+    <div class="btn-group">
+        <label>Camera Move Control</label>
+        <hr>
+        <button id="camera-forward" onclick="go_forward();">forward</button>
+        <button id="camera-backward" onclick="go_backward();">backward</button>
+        <button id="camera-left" onclick="go_left();">left</button>
+        <button id="camera-right" onclick="go_right();">right</button>
+    </div>
+    <div class="btn-group">
+        <label>Camera Rotate Control</label>
+        <hr>
+        <button id="camera-rotate-up" onclick="rotate_up();">up</button>
+        <button id="camera-rotate-down" onclick="rotate_down();">down</button>
+        <button id="camera-rotate-left" onclick="rotate_left();">left</button>
+        <button id="camera-rotate-right" onclick="rotate_right();">right</button>
+    </div>
+    <!-- Library Related -->
     <script src="assets/libs/gl-matrix.js"></script>
+    <!-- Library js utils used in general -->
+    <script src="assets/js/jsutils.js"></script>
+    <script src="assets/js/glmanager.js"></script>
+    <script src="assets/js/vertex.js"></script>
+    <script src="assets/js/texture.js"></script>
+    <script src="assets/js/shader.js"></script>
+    <script src="assets/js/mesh.js"></script>
     <script src="assets/js/objects.js"></script>
     <!-- Shader Related -->
-    <script src="assets/js/vao.js"></script>
-    <script src="assets/js/vbo.js"></script>
-    <script src="assets/js/shader.js"></script>
-    <!-- mesh Related -->
-    <script src="assets/js/mesh.js"></script>
     <!-- camera Related -->
     <script src="assets/js/camera.js"></script>
     <script src="assets/js/light.js"></script>
+    <!-- mesh viewer related -->
     <script src="assets/js/meshviewer.js">
     </script>
     <script type="x-shader/x-vertex" id="constant-vs">
-        attribute vec3 vcoord;
+        #version 300 es
+        layout(location = 0) in vec3 aPos;
+        layout(location = 1) in vec2 aTexCoord;
+        layout(location = 2) in vec3 aNormal;
+
         uniform mat4 model;
+        uniform mat4 view;
+        uniform mat4 projection;
+
         void main(){
-        gl_Position = model * vec4(vcoord, 1.0);
+            gl_Position = projection * view * model * vec4(aPos, 1.0);
         }
     </script>
     <script type="x-shader/x-fragment" id="constant-fs">
+        #version 300 es
         precision mediump float;
+
         uniform vec3 vcolor;
+        out vec4 FragColor;
         void main(){
-        gl_FragColor = vec4(vcolor, 1.0);
+        FragColor = vec4(vcolor, 1.0);
         }
     </script>
     <script type="x-shader/x-vertex" id="phong-vs">
@@ -144,22 +173,136 @@
     </script>
 
     <script>
-        var smanager;
-        smanager = new SceneManager();
-
         function init() {
             let canvas_id = "webgl-canvas";
             let vs_id = "constant-vs";
             let fs_id = "constant-fs";
-            smanager.init("webgl-canvas", vs_id, fs_id);
+            let sm = new SceneManager();
+            sm.init("webgl-canvas", vs_id, fs_id);
+            return sm;
+        }
+        var smanager = init();
+        var camera = new Camera(glMatrix.vec3.fromValues(0.0, 0.0, 20.3));
+
+        function mk_cube_mesh() {
+            // set model matrix
+            let model = glMatrix.mat4.create();
+
+            // set view matrix
+            let view = camera.get_view_matrix();
+
+            // set projection matrix
+            let fovy = glMatrix.glMatrix.toRadian(camera.zoom);
+            let canvas_id = "webgl-canvas";
+            let cnvs = document.getElementById(canvas_id);
+            let aspect = cnvs.width / cnvs.height;
+            let near = 0.1;
+            let far = 100.0;
+            let projmat = glMatrix.mat4.create();
+            glMatrix.mat4.perspective(projmat, fovy, aspect, near, far);
+
+            // color
+            let vcolor = glMatrix.vec3.fromValues(0.5, 0.3, 0.7);
+            vcolor[1] = 0.1;
+
+            let ufors = {
+                "model": {
+                    "name": "model",
+                    "data": model,
+                    "type": "mat4"
+                },
+                "view": {
+                    "name": "view",
+                    "data": view,
+                    "type": "mat4",
+                },
+                "projection": {
+                    "name": "projection",
+                    "data": projmat,
+                    "type": "mat4",
+                },
+                "vcolor": {
+                    "name": "vcolor",
+                    "data": vcolor,
+                    "type": "vec3",
+                }
+            };
+            let vertices = cube_vertex_texture_normal["vertices"];
+            let textures = [];
+            let indices = new Uint32Array(
+                cube_vertex_texture_normal["indices"]);
+            let uniforms = ufors;
+            var cubeMesh = new ArrayMesh(smanager.gl,
+                vertices, textures, indices, uniforms
+            );
+            return cubeMesh;
+        }
+
+        var cube_mesh = mk_cube_mesh();
+
+        function set_view() {
+            // set view matrix
+            let view = camera.get_view_matrix();
+            let vprop = {
+                "name": "view",
+                "data": view,
+                "type": "mat4",
+            };
+            cube_mesh.set_uniform_prop(vprop);
+        }
+
+        function move_camera(m) {
+            camera.process_keyboard(m, 0.5);
+            set_view();
+            let vw2 = camera.get_view_matrix();
+            draw();
+        }
+
+        function rotate_camera(m) {
+            camera.process_keyboard_rotate(m, 0.5);
+            set_view();
+            let vw2 = camera.get_view_matrix();
+            draw();
+        }
+
+        function go_forward() {
+            move_camera("FORWARD");
+        }
+
+        function go_backward() {
+            move_camera("BACKWARD");
+        }
+
+        function go_left() {
+            move_camera("LEFT");
+        }
+
+        function go_right() {
+            move_camera("RIGHT");
+        }
+
+        function rotate_up() {
+            rotate_camera("FORWARD");
+        }
+
+        function rotate_down() {
+            rotate_camera("BACKWARD");
+        }
+
+        function rotate_left() {
+            rotate_camera("LEFT");
+        }
+
+        function rotate_right() {
+            rotate_camera("RIGHT");
         }
 
         function draw() {
+            smanager.clear();
+            smanager.add_renderable(cube_mesh);
             smanager.draw();
         }
-        init();
     </script>
-
 </body>
 
 </html>

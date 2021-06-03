@@ -24,9 +24,7 @@ class Camera {
     ) {
         this.pos = pos;
         this.front = front;
-        this.up = up;
-        this.right;
-        this.worldUp;
+        this.worldUp = up;
         // euler angles
         this.yaw = yaw;
         this.pitch = pitch;
@@ -51,71 +49,60 @@ class Camera {
     }
     update_camera_vectors() {
         let front = glMatrix.vec3.create();
-        let rad_yaw = glMatrix.toRadian(this.yaw);
-        let rad_pitch = glMatrix.toRadian(this.pitch);
-        front.x = Math.cos(rad_yaw) * Math.cos(rad_pitch);
-        front.y = Math.sin(rad_pitch);
-        front.z = Math.sin(rad_yaw) * Math.cos(rad_pitch);
+        let rad_yaw = glMatrix.glMatrix.toRadian(this.yaw);
+        let rad_pitch = glMatrix.glMatrix.toRadian(this.pitch);
+        front[0] = Math.cos(rad_yaw) * Math.cos(rad_pitch);
+        front[1] = Math.sin(rad_pitch);
+        front[2] = Math.sin(rad_yaw) * Math.cos(rad_pitch);
         glMatrix.vec3.normalize(this.front, front);
         //
         // compute right
         let right = glMatrix.vec3.create();
-        glMatrix.vec3.normalize(this.right,
-            glMatrix.vec3.cross(right, this.front, this.worldUp));
+        glMatrix.vec3.cross(right, this.front, this.worldUp);
+        this.right = glMatrix.vec3.create();
+        glMatrix.vec3.normalize(this.right, right);
         //
         // compute up
         let up = glMatrix.vec3.create();
-        glMatrix.vec3.normalize(this.up,
-            glMatrix.vec3.cross(up, this.right, this.front));
+        glMatrix.vec3.cross(up, this.right, this.front);
+        this.up = glMatrix.vec3.create();
+        glMatrix.vec3.normalize(this.up, up);
     }
     process_keyboard(movement, deltaTime) {
         let velocity = this.movementSpeed * deltaTime;
+        let fvel = glMatrix.vec3.create();
+        let pos = glMatrix.vec3.create();
         if (movement === CAMERA_MOVEMENT["FORWARD"]) {
-            this.pos += this.front * velocity;
+            glMatrix.vec3.scale(fvel, this.front, velocity);
+            console.log(fvel);
+            glMatrix.vec3.add(pos, this.pos, fvel);
+            this.pos = pos;
         } else if (movement === CAMERA_MOVEMENT["BACKWARD"]) {
-            this.pos -= this.front * velocity;
+            glMatrix.vec3.scale(fvel, this.front, velocity);
+            glMatrix.vec3.subtract(pos, this.pos, fvel);
+            this.pos = pos;
         } else if (movement === CAMERA_MOVEMENT["RIGHT"]) {
-            this.pos += this.right * velocity;
+            glMatrix.vec3.scale(fvel, this.right, velocity);
+            glMatrix.vec3.add(pos, this.pos, fvel);
+            this.pos = pos;
         } else if (movement === CAMERA_MOVEMENT["LEFT"]) {
-            this.pos -= this.right * velocity;
+            glMatrix.vec3.scale(fvel, this.right, velocity);
+            glMatrix.vec3.subtract(pos, this.pos, fvel);
+            this.pos = pos;
         }
     }
     get_view_matrix() {
-        let target = this.pos + this.front;
-        let upvec = this.up;
-        let cameraDirection = glMatrix.vec3.create();
-        glMatrix.vec3.normalize(cameraDirection, this.pos - target);
-        let upv = glMatrix.vec3.create();
-        let right = glMatrix.vec3.create();
-        //
-        glMatrix.vec3.normalize(right,
-            glMatrix.vec3.cross(upv, upvec, cameraDirection)
-        );
-        let realUp = glMatrix.vec3.create();
-        glMatrix.vec3.normalize(realUp,
-            glMatrix.vec3.cross(glMatrix.vec3.create(), cameraDirection, right)
-        );
-        //
-        let trans = glMatrix.mat4.create(1.0);
-        trans[3][0] = -this.pos.x;
-        trans[3][1] = -this.pos.y;
-        trans[3][2] = -this.pos.z;
-
-        //
-        let rotation = glMatrix.mat4.create(1.0);
-        rotation[0][0] = right.x;
-        rotation[1][0] = right.y;
-        rotation[2][0] = right.z;
-        rotation[0][1] = realUp.x;
-        rotation[1][1] = realUp.y;
-        rotation[2][1] = realUp.z;
-        rotation[0][2] = cameraDirection.x;
-        rotation[1][2] = cameraDirection.y;
-        rotation[2][2] = cameraDirection.z;
-        return rotation * trans;
+        let cpos = this.pos;
+        let cfront = this.front;
+        let cup = this.up;
+        let front_pos = glMatrix.vec3.create();
+        glMatrix.vec3.add(front_pos, cpos, cfront);
+        let view = glMatrix.mat4.create();
+        glMatrix.mat4.lookAt(view, cpos, front_pos, cup);
+        return view;
     }
 
-    processKeyBoardRotate(direction, deltaTime) {
+    process_keyboard_rotate(direction, deltaTime) {
 
         deltaTime *= this.movementSpeed;
         if (direction === CAMERA_MOVEMENT["FORWARD"]) {
@@ -129,7 +116,7 @@ class Camera {
         }
         this.update_camera_vectors();
     }
-    processMouseScroll(yoffset) {
+    process_mouse_scroll(yoffset) {
         let zoom = this.zoom;
 
         if (this.zoom >= 1.0 && this.zoom <= 45.0) {
